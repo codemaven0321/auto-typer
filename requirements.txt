@@ -1,0 +1,7 @@
+human-typer>=1.1.1
+customtkinter>=5.2.0
+keyboard>=0.13.5
+pillow>=10.0.0
+pyperclip>=1.8.2
+pywin32>=306
+selenium>=4.0.0
