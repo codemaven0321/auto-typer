@@ -8,7 +8,6 @@ from tkinter import messagebox
 import customtkinter as ctk
 import pyperclip
 
-from .target_picker import PositionTargetPicker, TargetWindow, focus_target
 from .typer_engine import BREAK_PRESETS, HumanTypingEngine, TypingSettings
 
 ACCENT = "#6C63FF"
@@ -108,8 +107,6 @@ class App(ctk.CTk):
         self.configure(fg_color="#141416")
 
         self.engine = HumanTypingEngine()
-        self.target: TargetWindow | None = None
-        self._picker: PositionTargetPicker | None = None
         self._was_stopped = False
 
         self._build()
@@ -139,29 +136,7 @@ class App(ctk.CTk):
             button_hover_color="#FFFFFF",
             command=self._on_topmost_toggle,
         )
-        self.topmost_switch.grid(row=0, column=0, sticky="e", padx=(0, 8))
-
-        self.pick_btn = ctk.CTkButton(
-            header,
-            text="🎯  Pick…",
-            width=72,
-            height=24,
-            font=btn_font,
-            fg_color=ACCENT,
-            hover_color=ACCENT_HOVER,
-            corner_radius=6,
-            command=self._pick_target,
-        )
-        self.pick_btn.grid(row=0, column=1, sticky="e")
-
-        self.target_label = ctk.CTkLabel(
-            header,
-            text="No target — focused window",
-            text_color=MUTED,
-            font=small_font,
-            anchor="e",
-        )
-        self.target_label.grid(row=1, column=0, columnspan=2, sticky="e", pady=(4, 0))
+        self.topmost_switch.grid(row=0, column=0, sticky="e")
 
         text_wrap = ctk.CTkFrame(root, fg_color=SURFACE, corner_radius=8)
         text_wrap.grid(row=1, column=0, sticky="nsew")
@@ -373,49 +348,6 @@ class App(ctk.CTk):
         alpha = max(0.30, min(1.0, percent / 100.0))
         self.attributes("-alpha", alpha)
 
-    def _pick_target(self) -> None:
-        if self.engine.is_running or self._picker is not None:
-            return
-
-        self.pick_btn.configure(state="disabled", text="Click…")
-        self.status.configure(text="Click the text field (Esc cancels)")
-
-        exclude: set[int] = set()
-        try:
-            import win32con
-            import win32gui
-
-            hwnd = int(self.winfo_id())
-            exclude.add(hwnd)
-            root = win32gui.GetAncestor(hwnd, win32con.GA_ROOT)
-            if root:
-                exclude.add(int(root))
-        except Exception:
-            pass
-
-        def on_picked(target: TargetWindow | None) -> None:
-            self._picker = None
-            self.pick_btn.configure(state="normal", text="🎯  Pick…")
-            self.lift()
-            self.focus_force()
-            if target is None:
-                self.status.configure(text="Target pick cancelled")
-                return
-            if target.hwnd in exclude:
-                self.target = None
-                self.target_label.configure(
-                    text="No target — click another app's text field"
-                )
-                self.status.configure(text="Ignored — picked this app")
-                return
-            self.target = target
-            self.target_label.configure(text=f"Target: {target.label}")
-            self.status.configure(
-                text="Target set — will click that position before typing"
-            )
-
-        self._picker = PositionTargetPicker(self, on_picked, exclude_hwnds=exclude)
-
     def _on_stop_toggle(self) -> None:
         if self.stop_switch.get() == 1:
             self._was_stopped = True
@@ -458,16 +390,9 @@ class App(ctk.CTk):
         self._was_stopped = False
         self.stop_switch.deselect()
         self.start_btn.configure(state="disabled")
-        self.status.configure(text="Starting in 2 seconds — focus your target…")
+        self.status.configure(text="Starting in 2 seconds — click the text field…")
 
         def begin() -> None:
-            if self.target is not None:
-                ok = focus_target(self.target)
-                if not ok:
-                    self.status.configure(
-                        text="Target lost — typing into the current focused window"
-                    )
-
             self.status.configure(text="Typing…")
             self.engine.type_text(
                 content,
@@ -497,11 +422,6 @@ class App(ctk.CTk):
 
     def _on_close(self) -> None:
         self.engine.stop()
-        if self._picker is not None:
-            try:
-                self._picker._finish(None)
-            except Exception:
-                pass
         self.destroy()
 
 

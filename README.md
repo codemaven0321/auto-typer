@@ -19,10 +19,9 @@ Or double-click `run.bat`.
 ## Usage
 
 1. Paste or type the text you want typed out.
-2. Click **Pick target...**, then click the destination text field (crosshair + window highlight). Esc cancels.
-3. Tune CPM, jitter, mistake chance, correction delay, and typing breaks.
-4. Click **Start typing** — the app re-focuses that window and clicks the saved position, then types.
-5. Flip **Stop** to halt mid-run.
+2. Tune CPM, jitter, mistake chance, correction delay, and typing breaks.
+3. Click **Start typing**, then focus the destination text field during the 2s countdown.
+4. Flip **Stop** to halt mid-run.
 
 ## Notes
 

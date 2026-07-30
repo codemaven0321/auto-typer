@@ -246,10 +246,10 @@ class HumanTypingEngine:
         wrong = base.get_random_close_neighbor(char, layout)
         if random.random() < 0.65:
             self._type_char(wrong)
-            if self._interruptible_sleep(random.uniform(corr_lo, corr_hi)):
+            if self._interruptible_sleep(self._uniform(corr_lo, corr_hi)):
                 return
             self._tap("backspace")
-            if self._interruptible_sleep(random.uniform(corr_lo * 0.45, corr_hi * 0.55)):
+            if self._interruptible_sleep(self._uniform(corr_lo * 0.45, corr_hi * 0.55)):
                 return
             self._type_char(char)
         else:
@@ -258,7 +258,7 @@ class HumanTypingEngine:
             if self._stop.is_set():
                 return
             self._type_char(wrong)
-            if self._interruptible_sleep(random.uniform(corr_lo, corr_hi)):
+            if self._interruptible_sleep(self._uniform(corr_lo, corr_hi)):
                 return
             self._tap("backspace")
 
@@ -326,7 +326,7 @@ class HumanTypingEngine:
 
     def _maybe_break(self, char: str, text: str, index: int, breaks: dict) -> None:
         if breaks["think_chance"] > 0 and random.random() < breaks["think_chance"]:
-            self._interruptible_sleep(random.uniform(*breaks["think_pause"]))
+            self._interruptible_sleep(self._uniform(*breaks["think_pause"]))
             return
 
         nxt = text[index + 1] if index + 1 < len(text) else ""
@@ -334,19 +334,35 @@ class HumanTypingEngine:
         if char == "\n":
             # Blank line (paragraph) vs single line break.
             if nxt == "\n":
-                self._interruptible_sleep(random.uniform(*breaks["paragraph_pause"]))
+                self._interruptible_sleep(self._uniform(*breaks["paragraph_pause"]))
             else:
-                self._interruptible_sleep(random.uniform(*breaks["line_pause"]))
+                self._interruptible_sleep(self._uniform(*breaks["line_pause"]))
         elif char in ".!?" and (nxt in " \n\t" or nxt == ""):
-            self._interruptible_sleep(random.uniform(*breaks["sentence_pause"]))
+            self._interruptible_sleep(self._uniform(*breaks["sentence_pause"]))
         elif char == " " and nxt and nxt not in " \n\t":
-            self._interruptible_sleep(random.uniform(*breaks["word_pause"]))
+            self._interruptible_sleep(self._uniform(*breaks["word_pause"]))
+
+    @staticmethod
+    def _uniform(lo: float, hi: float) -> float:
+        """random.uniform that never errors when bounds are equal or swapped."""
+        a, b = float(lo), float(hi)
+        if b < a:
+            a, b = b, a
+        if a == b:
+            return a
+        return random.uniform(a, b)
 
     def _interruptible_sleep(self, seconds: float) -> bool:
         """Sleep in slices so Stop reacts quickly. Returns True if stopped."""
-        end = time.perf_counter() + max(0.0, seconds)
-        while time.perf_counter() < end:
+        remaining = max(0.0, float(seconds))
+        if remaining <= 0:
+            return self._stop.is_set()
+        end = time.perf_counter() + remaining
+        while True:
             if self._stop.is_set():
                 return True
-            time.sleep(min(0.05, end - time.perf_counter()))
+            left = end - time.perf_counter()
+            if left <= 0:
+                break
+            time.sleep(min(0.05, left))
         return self._stop.is_set()
