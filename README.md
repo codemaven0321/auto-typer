@@ -19,9 +19,24 @@ Or double-click `run.bat`.
 ## Usage
 
 1. Paste or type the text you want typed out.
-2. Tune CPM, jitter, mistake chance, correction delay, and typing breaks.
-3. Click **Start typing**, then focus the destination text field during the 2s countdown.
-4. Flip **Stop** to halt mid-run.
+2. For multi-field forms, put special keys **in the text** as `{TOKEN}` (use **Insert key…** or type them):
+
+```text
+John{TAB}Doe{TAB}john@email.com{ENTER}
+```
+
+| Token | Key |
+|---|---|
+| `{TAB}` | Tab (next field) |
+| `{ENTER}` | Enter |
+| `{LEFT}` `{RIGHT}` `{UP}` `{DOWN}` | Arrows |
+| `{BACKSPACE}` `{DELETE}` | Edit keys |
+| `{HOME}` `{END}` `{ESC}` `{SPACE}` | Other |
+
+3. Tune CPM, jitter, mistake chance, correction delay, and typing breaks.
+4. Click **Start**, then focus the first field during the 2s countdown.
+5. Flip **Stop** to halt mid-run.
+6. **Keys** = per-key sounds from `app/sounds` (synced). **Alert** = done/error beep.
 
 ## Notes
 

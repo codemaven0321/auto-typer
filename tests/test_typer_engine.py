@@ -10,6 +10,7 @@ from app.typer_engine import (
     HumanTypingEngine,
     TypingSettings,
     normalize_text,
+    parse_events,
 )
 
 
@@ -23,6 +24,32 @@ class NormalizeTests(unittest.TestCase):
     def test_keeps_blank_lines(self) -> None:
         self.assertEqual(normalize_text("a\n\nb"), "a\n\nb")
         self.assertEqual(normalize_text("a\r\n\r\nb"), "a\n\nb")
+
+
+class ParseEventsTests(unittest.TestCase):
+    def test_tab_token_and_escape(self) -> None:
+        self.assertEqual(
+            parse_events("a{TAB}b\\tc"),
+            [("char", "a"), ("key", "tab"), ("char", "b"), ("key", "tab"), ("char", "c")],
+        )
+
+    def test_enter_token(self) -> None:
+        self.assertEqual(
+            parse_events("x{ENTER}y"),
+            [("char", "x"), ("key", "enter"), ("char", "y")],
+        )
+
+    def test_raw_tab_and_newline(self) -> None:
+        self.assertEqual(
+            parse_events("a\tb\nc"),
+            [
+                ("char", "a"),
+                ("key", "tab"),
+                ("char", "b"),
+                ("key", "enter"),
+                ("char", "c"),
+            ],
+        )
 
 
 class TypingDispatchTests(unittest.TestCase):
@@ -74,6 +101,30 @@ class TypingDispatchTests(unittest.TestCase):
 
         self.assertTrue(done["ok"])
         self.assertEqual(taps, ["space", "tab"])
+
+    def test_special_tokens_dispatch_keys(self) -> None:
+        engine = HumanTypingEngine()
+        settings = TypingSettings(cpm=900, jitter=0, mistake_chance_pct=0, breaks="Off")
+        taps: list[str] = []
+
+        with (
+            patch.object(HumanTypingEngine, "_tap", side_effect=lambda k: taps.append(k)),
+            patch("app.typer_engine.write"),
+            patch.object(HumanTypingEngine, "_interruptible_sleep", return_value=False),
+        ):
+            done = {"ok": False}
+            engine.type_text(
+                "a{TAB}b{ENTER}c{ESC}",
+                settings,
+                on_done=lambda e: done.update(ok=e is None),
+            )
+            for _ in range(50):
+                if not engine.is_running:
+                    break
+                time.sleep(0.02)
+
+        self.assertTrue(done["ok"])
+        self.assertEqual(taps, ["tab", "enter", "esc"])
 
 
 class HumanPacingTests(unittest.TestCase):

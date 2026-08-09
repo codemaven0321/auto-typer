@@ -8,7 +8,13 @@ from tkinter import messagebox
 import customtkinter as ctk
 import pyperclip
 
-from .typer_engine import BREAK_PRESETS, HumanTypingEngine, TypingSettings
+try:
+    import winsound
+except ImportError:  # pragma: no cover
+    winsound = None  # type: ignore
+
+from .typer_engine import BREAK_PRESETS, HumanTypingEngine, TypingSettings, parse_events
+from .typing_sounds import TypingSoundPlayer
 
 ACCENT = "#6C63FF"
 ACCENT_HOVER = "#5A52E0"
@@ -107,6 +113,7 @@ class App(ctk.CTk):
         self.configure(fg_color="#141416")
 
         self.engine = HumanTypingEngine()
+        self.key_sounds = TypingSoundPlayer()
         self._was_stopped = False
 
         self._build()
@@ -125,8 +132,40 @@ class App(ctk.CTk):
         header.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         header.grid_columnconfigure(0, weight=1)
 
+        switches = ctk.CTkFrame(header, fg_color="transparent")
+        switches.grid(row=0, column=0, sticky="e")
+
+        self.keysound_switch = ctk.CTkSwitch(
+            switches,
+            text="Keys",
+            width=36,
+            height=18,
+            font=small_font,
+            progress_color=ACCENT,
+            button_color="#D0D0D8",
+            button_hover_color="#FFFFFF",
+            command=self._on_keysound_toggle,
+        )
+        # On by default so keystroke sounds are audible without hunting for the switch.
+        self.keysound_switch.select()
+        self.key_sounds.set_enabled(True)
+        self.keysound_switch.pack(side="left", padx=(0, 10))
+
+        self.alert_switch = ctk.CTkSwitch(
+            switches,
+            text="Alert",
+            width=36,
+            height=18,
+            font=small_font,
+            progress_color=ACCENT,
+            button_color="#D0D0D8",
+            button_hover_color="#FFFFFF",
+        )
+        self.alert_switch.select()
+        self.alert_switch.pack(side="left", padx=(0, 10))
+
         self.topmost_switch = ctk.CTkSwitch(
-            header,
+            switches,
             text="On top",
             width=36,
             height=18,
@@ -136,7 +175,7 @@ class App(ctk.CTk):
             button_hover_color="#FFFFFF",
             command=self._on_topmost_toggle,
         )
-        self.topmost_switch.grid(row=0, column=0, sticky="e")
+        self.topmost_switch.pack(side="left")
 
         text_wrap = ctk.CTkFrame(root, fg_color=SURFACE, corner_radius=8)
         text_wrap.grid(row=1, column=0, sticky="nsew")
@@ -155,6 +194,12 @@ class App(ctk.CTk):
         self.text.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
         self.text.bind("<KeyRelease>", self._update_counts)
         self.text.bind("<<Paste>>", lambda _e: self.after(10, self._update_counts))
+        # Insert a real tab instead of moving focus out of the editor.
+        self.text.bind("<Tab>", self._insert_tab)
+        try:
+            self.text._textbox.bind("<Tab>", self._insert_tab)
+        except Exception:
+            pass
 
         self.count_label = ctk.CTkLabel(
             root,
@@ -259,6 +304,37 @@ class App(ctk.CTk):
             command=self._clear_text,
         ).pack(side="left", padx=(0, 4))
 
+        # Insert special-key tokens into the text (for forms: Tab between fields, arrows, …).
+        self.keys_menu = ctk.CTkOptionMenu(
+            actions,
+            values=[
+                "Insert key…",
+                "{TAB}",
+                "{ENTER}",
+                "{LEFT}",
+                "{RIGHT}",
+                "{UP}",
+                "{DOWN}",
+                "{BACKSPACE}",
+                "{DELETE}",
+                "{HOME}",
+                "{END}",
+                "{ESC}",
+                "{SPACE}",
+            ],
+            width=100,
+            height=24,
+            font=btn_font,
+            fg_color=SURFACE_2,
+            button_color=SURFACE_2,
+            button_hover_color=BORDER,
+            dropdown_fg_color=SURFACE,
+            dropdown_font=btn_font,
+            command=self._on_insert_key_menu,
+        )
+        self.keys_menu.set("Insert key…")
+        self.keys_menu.pack(side="left", padx=(0, 4))
+
         self.breaks_btn = ctk.CTkOptionMenu(
             actions,
             values=list(BREAK_PRESETS.keys()),
@@ -336,12 +412,39 @@ class App(ctk.CTk):
         self.text.insert("insert", clip)
         self._update_counts()
 
+    def _insert_tab(self, _event=None):
+        # Prefer visible token so multi-field scripts are easy to read/edit.
+        self.text.insert("insert", "{TAB}")
+        self._update_counts()
+        return "break"
+
+    def _insert_special(self, token: str) -> None:
+        self.text.insert("insert", token)
+        self._update_counts()
+
+    def _on_insert_key_menu(self, choice: str) -> None:
+        if choice and choice != "Insert key…":
+            self._insert_special(choice)
+        self.keys_menu.set("Insert key…")
+
     def _clear_text(self) -> None:
         self.text.delete("1.0", "end")
         self._update_counts()
 
     def _on_topmost_toggle(self) -> None:
         self.attributes("-topmost", bool(self.topmost_switch.get()))
+
+    def _on_keysound_toggle(self) -> None:
+        self.key_sounds.set_enabled(bool(self.keysound_switch.get()))
+
+    def _play_done_sound(self, *, success: bool) -> None:
+        if not self.alert_switch.get() or winsound is None:
+            return
+        try:
+            flag = winsound.MB_OK if success else winsound.MB_ICONHAND
+            winsound.MessageBeep(flag)
+        except Exception:
+            pass
 
     def _on_opacity_change(self, percent: float) -> None:
         # Keep a usable minimum so the window can't vanish.
@@ -379,7 +482,7 @@ class App(ctk.CTk):
             return
 
         content = self.text.get("1.0", "end-1c")
-        if not content.strip():
+        if not parse_events(content):
             messagebox.showinfo("Nothing to type", "Paste or type some text first.")
             return
 
@@ -393,6 +496,7 @@ class App(ctk.CTk):
         self.status.configure(text="Starting in 2 seconds — click the text field…")
 
         def begin() -> None:
+            self.key_sounds.set_enabled(bool(self.keysound_switch.get()))
             self.status.configure(text="Typing…")
             self.engine.type_text(
                 content,
@@ -401,6 +505,7 @@ class App(ctk.CTk):
                     0, lambda d=done, t=total: self._on_progress(d, t)
                 ),
                 on_done=lambda err: self.after(0, lambda e=err: self._on_done(e)),
+                on_keystroke=self.key_sounds.play,
             )
 
         self.after(2000, begin)
@@ -414,14 +519,20 @@ class App(ctk.CTk):
         self.stop_switch.deselect()
         if error:
             self.status.configure(text=f"Error: {error}")
+            self._play_done_sound(success=False)
             messagebox.showerror("Typing failed", error)
         elif self._was_stopped:
             self.status.configure(text="Stopped.")
         else:
             self.status.configure(text="Done.")
+            self._play_done_sound(success=True)
 
     def _on_close(self) -> None:
         self.engine.stop()
+        try:
+            self.key_sounds.close()
+        except Exception:
+            pass
         self.destroy()
 
 
