@@ -146,9 +146,7 @@ class App(ctk.CTk):
             button_hover_color="#FFFFFF",
             command=self._on_keysound_toggle,
         )
-        # On by default so keystroke sounds are audible without hunting for the switch.
-        self.keysound_switch.select()
-        self.key_sounds.set_enabled(True)
+        self.key_sounds.set_enabled(False)
         self.keysound_switch.pack(side="left", padx=(0, 10))
 
         self.alert_switch = ctk.CTkSwitch(
@@ -175,6 +173,7 @@ class App(ctk.CTk):
             button_hover_color="#FFFFFF",
             command=self._on_topmost_toggle,
         )
+        self.topmost_switch.select()
         self.topmost_switch.pack(side="left")
 
         text_wrap = ctk.CTkFrame(root, fg_color=SURFACE, corner_radius=8)
@@ -220,18 +219,18 @@ class App(ctk.CTk):
             "Opacity %",
             30,
             100,
-            100,
+            60,
             on_change=self._on_opacity_change,
         )
         self.opacity.grid(row=0, column=0, sticky="ew", padx=(0, 6), pady=2)
 
-        self.cpm = SliderRow(settings, "CPM", 80, 900, 400)
+        self.cpm = SliderRow(settings, "CPM", 80, 900, 450)
         self.cpm.grid(row=0, column=1, sticky="ew", padx=(6, 0), pady=2)
 
         self.jitter = SliderRow(settings, "Jitter (±)", 0, 200, 40)
         self.jitter.grid(row=1, column=0, sticky="ew", padx=(0, 6), pady=2)
 
-        self.mistakes = SliderRow(settings, "Mistakes %", 0, 15, 0)
+        self.mistakes = SliderRow(settings, "Mistakes %", 0, 15, 3)
         self.mistakes.grid(row=1, column=1, sticky="ew", padx=(6, 0), pady=2)
 
         corr = ctk.CTkFrame(settings, fg_color="transparent")
@@ -392,6 +391,9 @@ class App(ctk.CTk):
             font=small_font,
             anchor="e",
         ).grid(row=0, column=1, sticky="e")
+
+        self._on_opacity_change(60)
+        self._on_topmost_toggle()
 
     def _break_preset(self) -> str:
         return self.breaks_btn.get()

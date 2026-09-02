@@ -61,7 +61,7 @@ class TypingDispatchTests(unittest.TestCase):
 
         with (
             patch.object(HumanTypingEngine, "_tap", side_effect=lambda k: taps.append(k)),
-            patch("app.typer_engine.write", side_effect=lambda c, delay=0: writes.append(c)),
+            patch("app.typer_engine.type_char_with_fallback", side_effect=lambda c: writes.append(c)),
             patch.object(HumanTypingEngine, "_interruptible_sleep", return_value=False),
         ):
             done = {"ok": False}
@@ -89,7 +89,7 @@ class TypingDispatchTests(unittest.TestCase):
 
         with (
             patch.object(HumanTypingEngine, "_tap", side_effect=lambda k: taps.append(k)),
-            patch("app.typer_engine.write"),
+            patch("app.typer_engine.type_char_with_fallback"),
             patch.object(HumanTypingEngine, "_interruptible_sleep", return_value=False),
         ):
             done = {"ok": False}
@@ -109,7 +109,7 @@ class TypingDispatchTests(unittest.TestCase):
 
         with (
             patch.object(HumanTypingEngine, "_tap", side_effect=lambda k: taps.append(k)),
-            patch("app.typer_engine.write"),
+            patch("app.typer_engine.type_char_with_fallback"),
             patch.object(HumanTypingEngine, "_interruptible_sleep", return_value=False),
         ):
             done = {"ok": False}
@@ -139,7 +139,7 @@ class HumanPacingTests(unittest.TestCase):
 
         with (
             patch.object(HumanTypingEngine, "_tap"),
-            patch("app.typer_engine.write"),
+            patch("app.typer_engine.type_char_with_fallback"),
             patch.object(HumanTypingEngine, "_interruptible_sleep", side_effect=fake_sleep),
         ):
             settings = TypingSettings(

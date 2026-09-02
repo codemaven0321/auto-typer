@@ -41,5 +41,6 @@ John{TAB}Doe{TAB}john@email.com{ENTER}
 ## Notes
 
 - The app must run with permission to send keystrokes (normal user is fine; some elevated apps won’t accept input from a non-elevated typer).
+- **Remote desktop (RDP, Parsec, TeamViewer, etc.):** typing uses hardware scan codes so letters reach the remote session. Older builds used Unicode injection, which many remotes ignore (only Space worked).
 - `human-typer` ships with a broken import on some installs; this app loads it via a compatibility shim.
-- Default mistake chance is `0` — raise it slightly (1–3%) for more human slips.
+- Default mistake chance is `3`% — set to `0` for perfect typing.

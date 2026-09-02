@@ -8,9 +8,10 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
-from keyboard import send, write
+from keyboard import send
 
 from .human_typer_loader import Human_typer
+from .keyboard_input import type_char_with_fallback
 
 
 BREAK_PRESETS = {
@@ -180,9 +181,9 @@ def parse_events(text: str) -> list[tuple[str, str]]:
 
 @dataclass
 class TypingSettings:
-    cpm: float = 400.0
+    cpm: float = 450.0
     jitter: float = 40.0
-    mistake_chance_pct: float = 0.0
+    mistake_chance_pct: float = 3.0
     correction_delay_ms: tuple[int, int] = (500, 1000)
     breaks: str = "Natural"
     layout: str = "qwerty"
@@ -402,14 +403,8 @@ class HumanTypingEngine:
         elif char == " ":
             self._tap("space")
         else:
-            # write() handles most printable glyphs; fall back for odd symbols.
-            try:
-                write(char, delay=0)
-            except Exception:
-                try:
-                    send(char)
-                except Exception:
-                    pass
+            # Scan-code path works over RDP / remote desktop; keyboard.write() does not.
+            type_char_with_fallback(char)
 
     def _sleep_char(
         self,
