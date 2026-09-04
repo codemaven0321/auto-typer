@@ -36,7 +36,8 @@ John{TAB}Doe{TAB}john@email.com{ENTER}
 3. Tune CPM, jitter, mistake chance, correction delay, and typing breaks.
 4. Click **Start**, then focus the first field during the 2s countdown.
 5. Flip **Stop** to halt mid-run.
-6. **Keys** = per-key sounds from `app/sounds` (synced). **Alert** = done/error beep.
+6. **Keys** = per-key sounds from `app/sounds` (synced). **Alert** = when typing finishes, ring for up to 1 minute; **Silence** or **Stop** ends it. Errors still play a short beep.
+7. **White / Black** — app style (default Black).
 
 ## Notes
 

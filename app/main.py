@@ -13,16 +13,32 @@ try:
 except ImportError:  # pragma: no cover
     winsound = None  # type: ignore
 
+from .alerts import AlarmLoop
 from .typer_engine import BREAK_PRESETS, HumanTypingEngine, TypingSettings, parse_events
 from .typing_sounds import TypingSoundPlayer
 
 ACCENT = "#6C63FF"
 ACCENT_HOVER = "#5A52E0"
-SURFACE = "#1E1E22"
-SURFACE_2 = "#2A2A30"
-BORDER = "#3A3A42"
-TEXT = "#E8E8EC"
-MUTED = "#9A9AA3"
+THEMES = {
+    "Black": {
+        "mode": "dark",
+        "window": "#141416",
+        "surface": "#1E1E22",
+        "surface2": "#2A2A30",
+        "border": "#3A3A42",
+        "text": "#E8E8EC",
+        "muted": "#9A9AA3",
+    },
+    "White": {
+        "mode": "light",
+        "window": "#EEF0F3",
+        "surface": "#FFFFFF",
+        "surface2": "#E5E7EB",
+        "border": "#D1D5DB",
+        "text": "#1F2937",
+        "muted": "#6B7280",
+    },
+}
 
 
 class SliderRow(ctk.CTkFrame):
@@ -42,13 +58,15 @@ class SliderRow(ctk.CTkFrame):
         self.on_change = on_change
         self.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(
+        pal = THEMES["Black"]
+        self._label = ctk.CTkLabel(
             self,
             text=label,
-            text_color=TEXT,
+            text_color=pal["text"],
             anchor="w",
             font=ctk.CTkFont(size=12),
-        ).grid(row=0, column=0, sticky="w", padx=(0, 8))
+        )
+        self._label.grid(row=0, column=0, sticky="w", padx=(0, 8))
 
         self.var = ctk.DoubleVar(value=float(default))
         self.slider = ctk.CTkSlider(
@@ -69,8 +87,8 @@ class SliderRow(ctk.CTkFrame):
             width=48,
             height=24,
             justify="center",
-            fg_color=SURFACE_2,
-            border_color=BORDER,
+            fg_color=pal["surface2"],
+            border_color=pal["border"],
             font=ctk.CTkFont(size=12),
         )
         self.entry.grid(row=0, column=2, sticky="e")
@@ -100,6 +118,10 @@ class SliderRow(ctk.CTkFrame):
         self._on_entry()
         return float(self.var.get())
 
+    def apply_theme(self, pal: dict) -> None:
+        self._label.configure(text_color=pal["text"])
+        self.entry.configure(fg_color=pal["surface2"], border_color=pal["border"])
+
 
 class App(ctk.CTk):
     def __init__(self) -> None:
@@ -114,6 +136,7 @@ class App(ctk.CTk):
 
         self.engine = HumanTypingEngine()
         self.key_sounds = TypingSoundPlayer()
+        self.alarm = AlarmLoop()
         self._was_stopped = False
 
         self._build()
@@ -130,10 +153,21 @@ class App(ctk.CTk):
 
         header = ctk.CTkFrame(root, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", pady=(0, 6))
-        header.grid_columnconfigure(0, weight=1)
+        header.grid_columnconfigure(1, weight=1)
+
+        self.style_mode = ctk.CTkSegmentedButton(
+            header,
+            values=["White", "Black"],
+            width=140,
+            height=22,
+            font=small_font,
+            command=self._on_style_change,
+        )
+        self.style_mode.set("Black")
+        self.style_mode.grid(row=0, column=0, sticky="w")
 
         switches = ctk.CTkFrame(header, fg_color="transparent")
-        switches.grid(row=0, column=0, sticky="e")
+        switches.grid(row=0, column=1, sticky="e")
 
         self.keysound_switch = ctk.CTkSwitch(
             switches,
@@ -160,7 +194,20 @@ class App(ctk.CTk):
             button_hover_color="#FFFFFF",
         )
         self.alert_switch.select()
-        self.alert_switch.pack(side="left", padx=(0, 10))
+        self.alert_switch.pack(side="left", padx=(0, 6))
+        self.silence_btn = ctk.CTkButton(
+            switches,
+            text="Silence",
+            width=64,
+            height=20,
+            font=small_font,
+            fg_color="#D97706",
+            hover_color="#B45309",
+            corner_radius=6,
+            command=self._silence_alarm,
+            state="disabled",
+        )
+        self.silence_btn.pack(side="left", padx=(0, 10))
 
         self.topmost_switch = ctk.CTkSwitch(
             switches,
@@ -176,15 +223,16 @@ class App(ctk.CTk):
         self.topmost_switch.select()
         self.topmost_switch.pack(side="left")
 
-        text_wrap = ctk.CTkFrame(root, fg_color=SURFACE, corner_radius=8)
-        text_wrap.grid(row=1, column=0, sticky="nsew")
-        text_wrap.grid_columnconfigure(0, weight=1)
-        text_wrap.grid_rowconfigure(0, weight=1)
+        pal = THEMES["Black"]
+        self.text_wrap = ctk.CTkFrame(root, fg_color=pal["surface"], corner_radius=8)
+        self.text_wrap.grid(row=1, column=0, sticky="nsew")
+        self.text_wrap.grid_columnconfigure(0, weight=1)
+        self.text_wrap.grid_rowconfigure(0, weight=1)
 
         self.text = ctk.CTkTextbox(
-            text_wrap,
-            fg_color=SURFACE,
-            text_color=TEXT,
+            self.text_wrap,
+            fg_color=pal["surface"],
+            text_color=pal["text"],
             border_width=0,
             font=ctk.CTkFont(family="Consolas", size=12),
             wrap="word",
@@ -203,7 +251,7 @@ class App(ctk.CTk):
         self.count_label = ctk.CTkLabel(
             root,
             text="0 chars — 0 words",
-            text_color=MUTED,
+            text_color=pal["muted"],
             font=small_font,
             anchor="w",
         )
@@ -237,12 +285,13 @@ class App(ctk.CTk):
         corr.grid(row=2, column=0, columnspan=2, sticky="ew", pady=2)
         corr.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(
+        self.corr_label = ctk.CTkLabel(
             corr,
             text="Fix delay (ms)",
-            text_color=TEXT,
+            text_color=pal["text"],
             font=ctk.CTkFont(size=12),
-        ).grid(row=0, column=0, sticky="w", padx=(0, 8))
+        )
+        self.corr_label.grid(row=0, column=0, sticky="w", padx=(0, 8))
         delay_box = ctk.CTkFrame(corr, fg_color="transparent")
         delay_box.grid(row=0, column=1, sticky="e")
 
@@ -251,22 +300,23 @@ class App(ctk.CTk):
             width=48,
             height=24,
             justify="center",
-            fg_color=SURFACE_2,
-            border_color=BORDER,
+            fg_color=pal["surface2"],
+            border_color=pal["border"],
             font=ctk.CTkFont(size=12),
         )
         self.corr_lo.insert(0, "500")
         self.corr_lo.pack(side="left")
-        ctk.CTkLabel(delay_box, text="→", text_color=MUTED, font=small_font).pack(
-            side="left", padx=4
+        self.corr_arrow = ctk.CTkLabel(
+            delay_box, text="→", text_color=pal["muted"], font=small_font
         )
+        self.corr_arrow.pack(side="left", padx=4)
         self.corr_hi = ctk.CTkEntry(
             delay_box,
             width=48,
             height=24,
             justify="center",
-            fg_color=SURFACE_2,
-            border_color=BORDER,
+            fg_color=pal["surface2"],
+            border_color=pal["border"],
             font=ctk.CTkFont(size=12),
         )
         self.corr_hi.insert(0, "1000")
@@ -275,33 +325,35 @@ class App(ctk.CTk):
         actions = ctk.CTkFrame(root, fg_color="transparent")
         actions.grid(row=4, column=0, sticky="ew", pady=(8, 0))
 
-        ctk.CTkButton(
+        self.paste_btn = ctk.CTkButton(
             actions,
             text="Paste",
             width=52,
             height=24,
             font=btn_font,
-            fg_color=SURFACE_2,
-            hover_color=BORDER,
+            fg_color=pal["surface2"],
+            hover_color=pal["border"],
             border_width=1,
-            border_color=BORDER,
+            border_color=pal["border"],
             corner_radius=6,
             command=self._paste_clipboard,
-        ).pack(side="left", padx=(0, 4))
+        )
+        self.paste_btn.pack(side="left", padx=(0, 4))
 
-        ctk.CTkButton(
+        self.clear_btn = ctk.CTkButton(
             actions,
             text="Clear",
             width=48,
             height=24,
             font=btn_font,
-            fg_color=SURFACE_2,
-            hover_color=BORDER,
+            fg_color=pal["surface2"],
+            hover_color=pal["border"],
             border_width=1,
-            border_color=BORDER,
+            border_color=pal["border"],
             corner_radius=6,
             command=self._clear_text,
-        ).pack(side="left", padx=(0, 4))
+        )
+        self.clear_btn.pack(side="left", padx=(0, 4))
 
         # Insert special-key tokens into the text (for forms: Tab between fields, arrows, …).
         self.keys_menu = ctk.CTkOptionMenu(
@@ -324,10 +376,10 @@ class App(ctk.CTk):
             width=100,
             height=24,
             font=btn_font,
-            fg_color=SURFACE_2,
-            button_color=SURFACE_2,
-            button_hover_color=BORDER,
-            dropdown_fg_color=SURFACE,
+            fg_color=pal["surface2"],
+            button_color=pal["surface2"],
+            button_hover_color=pal["border"],
+            dropdown_fg_color=pal["surface"],
             dropdown_font=btn_font,
             command=self._on_insert_key_menu,
         )
@@ -340,10 +392,10 @@ class App(ctk.CTk):
             width=78,
             height=24,
             font=btn_font,
-            fg_color=SURFACE_2,
-            button_color=SURFACE_2,
-            button_hover_color=BORDER,
-            dropdown_fg_color=SURFACE,
+            fg_color=pal["surface2"],
+            button_color=pal["surface2"],
+            button_hover_color=pal["border"],
+            dropdown_fg_color=pal["surface"],
             dropdown_font=btn_font,
         )
         self.breaks_btn.set("Natural")
@@ -380,18 +432,20 @@ class App(ctk.CTk):
         footer.grid_columnconfigure(0, weight=1)
 
         self.status = ctk.CTkLabel(
-            footer, text="", text_color=MUTED, font=small_font, anchor="w"
+            footer, text="", text_color=pal["muted"], font=small_font, anchor="w"
         )
         self.status.grid(row=0, column=0, sticky="w")
 
-        ctk.CTkLabel(
+        self.hint_label = ctk.CTkLabel(
             footer,
             text="CPM varies",
-            text_color=MUTED,
+            text_color=pal["muted"],
             font=small_font,
             anchor="e",
-        ).grid(row=0, column=1, sticky="e")
+        )
+        self.hint_label.grid(row=0, column=1, sticky="e")
 
+        self._apply_style()
         self._on_opacity_change(60)
         self._on_topmost_toggle()
 
@@ -436,15 +490,67 @@ class App(ctk.CTk):
     def _on_topmost_toggle(self) -> None:
         self.attributes("-topmost", bool(self.topmost_switch.get()))
 
+    def _on_style_change(self, _value: str) -> None:
+        self._apply_style()
+
+    def _apply_style(self) -> None:
+        name = self.style_mode.get() if hasattr(self, "style_mode") else "Black"
+        pal = THEMES.get(name, THEMES["Black"])
+        ctk.set_appearance_mode(pal["mode"])
+        self.configure(fg_color=pal["window"])
+        self.text_wrap.configure(fg_color=pal["surface"])
+        self.text.configure(fg_color=pal["surface"], text_color=pal["text"])
+        self.count_label.configure(text_color=pal["muted"])
+        self.corr_label.configure(text_color=pal["text"])
+        self.corr_arrow.configure(text_color=pal["muted"])
+        for entry in (self.corr_lo, self.corr_hi):
+            entry.configure(fg_color=pal["surface2"], border_color=pal["border"])
+        for row in (self.opacity, self.cpm, self.jitter, self.mistakes):
+            row.apply_theme(pal)
+        for btn in (self.paste_btn, self.clear_btn):
+            btn.configure(
+                fg_color=pal["surface2"],
+                hover_color=pal["border"],
+                border_color=pal["border"],
+            )
+        for menu in (self.keys_menu, self.breaks_btn):
+            menu.configure(
+                fg_color=pal["surface2"],
+                button_color=pal["surface2"],
+                button_hover_color=pal["border"],
+                dropdown_fg_color=pal["surface"],
+            )
+        self.status.configure(text_color=pal["muted"])
+        self.hint_label.configure(text_color=pal["muted"])
+
     def _on_keysound_toggle(self) -> None:
         self.key_sounds.set_enabled(bool(self.keysound_switch.get()))
 
+    def _silence_alarm(self) -> None:
+        was_ringing = self.alarm.running
+        self.alarm.stop()
+        try:
+            self.silence_btn.configure(state="disabled")
+        except Exception:
+            pass
+        if was_ringing:
+            self.status.configure(text="Alarm silenced")
+
+    def _start_done_alarm(self) -> None:
+        if not self.alert_switch.get():
+            return
+        self.alarm.start(60.0)
+        self.silence_btn.configure(state="normal")
+        self.status.configure(text="Done · alarm 1 min · Silence to stop")
+
     def _play_done_sound(self, *, success: bool) -> None:
+        if success:
+            self._start_done_alarm()
+            return
         if not self.alert_switch.get() or winsound is None:
             return
         try:
-            flag = winsound.MB_OK if success else winsound.MB_ICONHAND
-            winsound.MessageBeep(flag)
+            winsound.MessageBeep(winsound.MB_ICONHAND)
         except Exception:
             pass
 
@@ -455,6 +561,10 @@ class App(ctk.CTk):
 
     def _on_stop_toggle(self) -> None:
         if self.stop_switch.get() == 1:
+            if self.alarm.running:
+                self._silence_alarm()
+                self.stop_switch.deselect()
+                return
             self._was_stopped = True
             self.engine.stop()
             self.status.configure(text="Stopping…")
@@ -492,6 +602,7 @@ class App(ctk.CTk):
         if settings is None:
             return
 
+        self._silence_alarm()
         self._was_stopped = False
         self.stop_switch.deselect()
         self.start_btn.configure(state="disabled")
@@ -531,6 +642,7 @@ class App(ctk.CTk):
 
     def _on_close(self) -> None:
         self.engine.stop()
+        self.alarm.stop()
         try:
             self.key_sounds.close()
         except Exception:
